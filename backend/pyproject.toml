@@ -1,0 +1,11 @@
+[project]
+name = "pushtalk-backend"
+version = "1.0.0"
+requires-python = ">=3.11"
+
+[tool.ruff]
+line-length = 150
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["F", "E", "W", "B"]
