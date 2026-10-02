@@ -226,16 +226,7 @@ input {
   padding-top: 1rem;
   border-top: 1px solid var(--border);
 }
-.profile-password {
-  margin-top: 1.25rem;
-  padding-top: 1rem;
-  border-top: 1px solid var(--border);
-}
-.profile-password h3 {
-  margin: 0 0 0.75rem;
-  font-size: 0.95rem;
-}
-.profile-password form {
+.change-password-form {
   display: grid;
   gap: 0.8rem;
 }

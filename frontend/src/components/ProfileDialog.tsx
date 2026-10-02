@@ -6,18 +6,12 @@ import type { Channel } from "../api/types";
 import { useAuth } from "../auth/AuthContext";
 import { ChannelSettingsDialog } from "./ChannelSettingsDialog";
 import { useLanguage } from "../i18n";
-import {
-  passwordChangeSchema,
-  profileSchema,
-  validateForm,
-} from "../validation";
+import { profileSchema, validateForm } from "../validation";
 
 const DEFAULT_AVATAR = "/images/avatar-placeholder.jpg";
 const MAX_PROFILE_PHOTO_BYTES = 2 * 1024 * 1024;
 const PROFILE_ERROR_TRANSLATIONS = {
   USERNAME_TAKEN: "usernameTaken",
-  CURRENT_PASSWORD_INVALID: "currentPasswordInvalid",
-  PASSWORD_UNCHANGED: "passwordMustDiffer",
   FILE_TOO_LARGE: "profilePhotoTooLarge",
   EMPTY_FILE: "profilePhotoUnsupported",
   UNSUPPORTED_MEDIA_TYPE: "profilePhotoUnsupported",
@@ -30,7 +24,7 @@ function imageSource(path: string | null | undefined): string {
 }
 
 export function ProfileDialog({ onClose }: { onClose: () => void }) {
-  const { user, updateProfile, updateAvatar, changePassword } = useAuth();
+  const { user, updateProfile, updateAvatar } = useAuth();
   const { t } = useLanguage();
   const navigate = useNavigate();
   const [username, setUsername] = useState(user?.username ?? "");
@@ -38,15 +32,6 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
-  const [passwordValues, setPasswordValues] = useState({
-    currentPassword: "",
-    newPassword: "",
-    confirmPassword: "",
-  });
-  const [passwordErrors, setPasswordErrors] = useState<Record<string, string>>(
-    {},
-  );
-  const [passwordNotice, setPasswordNotice] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [ownedChannels, setOwnedChannels] = useState<Channel[] | null>(null);
   const [managingChannel, setManagingChannel] = useState<Channel | null>(null);
@@ -102,49 +87,6 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
               )
             : err.message
           : t("profileSaveError"),
-      );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const savePassword = async (event: FormEvent) => {
-    event.preventDefault();
-    setError(null);
-    setPasswordNotice(null);
-    const validationErrors = await validateForm(
-      passwordChangeSchema,
-      passwordValues,
-      t,
-    );
-    setPasswordErrors(validationErrors);
-    if (Object.keys(validationErrors).length > 0) return;
-    setBusy(true);
-    try {
-      await changePassword(
-        passwordValues.currentPassword,
-        passwordValues.newPassword,
-      );
-      setPasswordValues({
-        currentPassword: "",
-        newPassword: "",
-        confirmPassword: "",
-      });
-      setPasswordErrors({});
-      setPasswordNotice(t("passwordChanged"));
-    } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? PROFILE_ERROR_TRANSLATIONS[
-              err.code as keyof typeof PROFILE_ERROR_TRANSLATIONS
-            ]
-            ? t(
-                PROFILE_ERROR_TRANSLATIONS[
-                  err.code as keyof typeof PROFILE_ERROR_TRANSLATIONS
-                ],
-              )
-            : err.message
-          : t("passwordChangeError"),
       );
     } finally {
       setBusy(false);
@@ -288,64 +230,6 @@ export function ProfileDialog({ onClose }: { onClose: () => void }) {
                 ))}
               </ul>
             )}
-          </section>
-          <section className="profile-password">
-            <h3>{t("changePassword")}</h3>
-            <form onSubmit={savePassword} noValidate>
-              {(
-                [
-                  ["currentPassword", "currentPassword"],
-                  ["newPassword", "newPassword"],
-                  ["confirmPassword", "confirmNewPassword"],
-                ] as const
-              ).map(([field, label]) => (
-                <label
-                  className={`profile-name-field${passwordErrors[field] ? " field--invalid" : ""}`}
-                  key={field}
-                >
-                  {t(label)}
-                  <input
-                    type="password"
-                    autoComplete={
-                      field === "currentPassword"
-                        ? "current-password"
-                        : "new-password"
-                    }
-                    className={passwordErrors[field] ? "input--invalid" : ""}
-                    aria-invalid={Boolean(passwordErrors[field])}
-                    value={passwordValues[field]}
-                    onChange={(event) => {
-                      setPasswordValues((current) => ({
-                        ...current,
-                        [field]: event.target.value,
-                      }));
-                      setPasswordErrors((current) => {
-                        const next = { ...current };
-                        delete next[field];
-                        if (field === "newPassword")
-                          delete next.confirmPassword;
-                        return next;
-                      });
-                    }}
-                  />
-                  {passwordErrors[field] && (
-                    <span className="field-error" role="alert">
-                      {passwordErrors[field]}
-                    </span>
-                  )}
-                </label>
-              ))}
-              {passwordNotice && (
-                <p className="success-text" role="status">
-                  {passwordNotice}
-                </p>
-              )}
-              <div className="modal-actions">
-                <button className="primary" type="submit" disabled={busy}>
-                  {busy ? t("loading") : t("updatePassword")}
-                </button>
-              </div>
-            </form>
           </section>
         </section>
       </div>

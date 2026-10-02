@@ -6,8 +6,9 @@ everyone else in the channel hears it automatically, one message at a time, in o
 **Stack:** Python 3.12 · FastAPI · SQLAlchemy 2 (async) · Alembic · PostgreSQL 16 · Redis 7 (pub/sub + arq job queue) ·
 ffmpeg · React 19 + TypeScript · Vite · nginx · Docker Compose.
 
-Design reasoning lives in [DECISIONS.md](DECISIONS.md), AI disclosure in [AI_USAGE.md](AI_USAGE.md), and what was
-actually verified (and what was not) in [docs/VERIFICATION.md](docs/VERIFICATION.md). The long-form study guide is
+Design reasoning lives in [DECISIONS.md](DECISIONS.md). AI disclosure and related notes live under
+[docs/ai/](docs/ai/). What was actually verified (and what was not) is in
+[docs/VERIFICATION.md](docs/VERIFICATION.md). The long-form study guide is
 [docs/PushTalk_Project_Guide.pdf](docs/PushTalk_Project_Guide.pdf).
 
 ---

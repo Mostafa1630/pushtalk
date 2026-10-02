@@ -23,6 +23,11 @@ const ProfileDialog = lazy(() =>
     default: module.ProfileDialog,
   })),
 );
+const ChangePasswordDialog = lazy(() =>
+  import("./components/ChangePasswordDialog").then((module) => ({
+    default: module.ChangePasswordDialog,
+  })),
+);
 const ChannelPage = lazy(() =>
   import("./pages/ChannelPage").then((module) => ({
     default: module.ChannelPage,
@@ -53,6 +58,7 @@ function TopBar() {
   const navigate = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [logoutNotice, setLogoutNotice] = useState(false);
 
@@ -103,6 +109,15 @@ function TopBar() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => {
+                    setChangePasswordOpen(true);
+                    setMenuOpen(false);
+                  }}
+                >
+                  {t("changePassword")}
+                </button>
+                <button
+                  type="button"
                   className="profile-menu__logout"
                   onClick={() => {
                     setLogoutConfirmOpen(true);
@@ -137,6 +152,13 @@ function TopBar() {
       {profileOpen && (
         <Suspense fallback={null}>
           <ProfileDialog onClose={() => setProfileOpen(false)} />
+        </Suspense>
+      )}
+      {changePasswordOpen && (
+        <Suspense fallback={null}>
+          <ChangePasswordDialog
+            onClose={() => setChangePasswordOpen(false)}
+          />
         </Suspense>
       )}
       {logoutConfirmOpen && (
