@@ -22,6 +22,7 @@ import {
   type ChatMessage,
 } from "../messages/messageModel";
 import { acquirePlaybackLeadership } from "../playback/leader";
+import { notificationFeed } from "../notifications/NotificationFeed";
 import {
   PlaybackQueue,
   type AudioPlayer,
@@ -38,7 +39,7 @@ import { newClientId } from "./ids";
 /** Catch-up messages older than this are shown as "unheard" instead of auto-played. */
 export const AUTOPLAY_MAX_AGE_MS = 5 * 60_000;
 const GAP_FILL_DELAY_MS = 800;
-const HISTORY_LIMIT = 50;
+const HISTORY_LIMIT = 10;
 const CATCHUP_PAGE = 200;
 
 export interface SessionState {
@@ -52,6 +53,9 @@ export interface SessionState {
   isLeader: boolean;
   fatalError: string | null;
   notice: string | null;
+  /** Reverse pagination: fetching the previous page, and whether one exists. */
+  loadingOlder: boolean;
+  hasMore: boolean;
 }
 
 type Source = "history" | "live" | "catchup";
@@ -67,6 +71,9 @@ export class ChannelSession {
   private releaseLeadership: () => void = () => {};
   private catchUpRunning = false;
   private catchUpAgain = false;
+  /** Oldest ready seq currently held (cursor for the next `before_seq` page). */
+  private oldestSeq: number | null = null;
+  private loadingOlder = false;
   private gapTimer: ReturnType<typeof setTimeout> | null = null;
   private noticeTimer: ReturnType<typeof setTimeout> | null = null;
   private destroyed = false;
@@ -97,6 +104,8 @@ export class ChannelSession {
       isLeader: false,
       fatalError: null,
       notice: null,
+      loadingOlder: false,
+      hasMore: false,
     };
   }
 
@@ -288,12 +297,49 @@ export class ChannelSession {
       limit: HISTORY_LIMIT,
     });
     const ready = page.messages.filter(isReady);
+    const oldest = ready[0];
+    this.oldestSeq = oldest ? oldest.seq : null;
+    this.set({ hasMore: page.has_more });
     this.sequencer = new MessageSequencer(
       historyCursorBeforePage(page.latest_seq, ready),
     );
     this.applyReady(ready, "history");
     for (const dto of page.messages.filter((m) => !isReady(m)))
       this.upsert(fromDTO(dto));
+  }
+
+  /** Fetch the page of ready messages older than anything we hold. Single-flight. */
+  async loadOlder(): Promise<void> {
+    if (this.loadingOlder || this.oldestSeq === null || this.destroyed) return;
+    this.loadingOlder = true;
+    this.set({ loadingOlder: true });
+    try {
+      const page = await messageApi.list(this.channelId, {
+        beforeSeq: this.oldestSeq,
+        limit: HISTORY_LIMIT,
+      });
+      const ready = page.messages.filter(isReady);
+      const oldest = ready[0];
+      if (oldest) this.oldestSeq = oldest.seq;
+      // Older pages are entirely ready and below the sequencer's floor: apply
+      // directly, the same way the first history page is.
+      const toAck: string[] = [];
+      for (const dto of ready) {
+        const fromOther = dto.sender_id !== this.selfUserId;
+        this.upsert({
+          ...fromDTO(dto),
+          unheard: fromOther && !dto.played_by_me,
+        });
+        if (fromOther) toAck.push(dto.id);
+      }
+      if (toAck.length > 0) this.socketSend({ type: "ack", delivered: toAck });
+      this.set({ hasMore: page.has_more, loadingOlder: false });
+    } catch {
+      // Transient error: let the user scroll up again to retry.
+      this.set({ loadingOlder: false });
+    } finally {
+      this.loadingOlder = false;
+    }
   }
 
   /** Fetch everything after our last seq, page by page. Single-flight. */
@@ -419,6 +465,10 @@ export class ChannelSession {
       case "presence":
         this.set({ online: event.online });
         this.syncMembers(event.online);
+        break;
+      case "notification.new":
+        // Per-user push arriving on this channel socket; the bell reads it.
+        notificationFeed.receive(event.notification);
         break;
       case "resync":
         void this.catchUp();

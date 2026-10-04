@@ -65,6 +65,32 @@ export interface MessagePage {
   has_more: boolean;
 }
 
+export type NotificationType = "channel_joined" | "channel_message";
+
+export interface NotificationDTO {
+  id: number;
+  type: NotificationType;
+  title: string;
+  body: string;
+  /** The channel the notification is about (join/message notifications). */
+  related_id: number | null;
+  // Resolved at read time so the client can render localized text with the
+  // current channel name / sender username (survives renames).
+  channel_name: string | null;
+  actor_username: string | null;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface NotificationPage {
+  notifications: NotificationDTO[];
+  has_more: boolean;
+}
+
+export interface UnreadCount {
+  count: number;
+}
+
 export interface ApiErrorBody {
   error: {
     code: string;
@@ -93,6 +119,7 @@ export type ServerEvent =
       receipts: ReceiptSummary;
     }
   | { type: "presence"; online: number[] }
+  | { type: "notification.new"; notification: NotificationDTO }
   | { type: "resync" }
   | { type: "pong" }
   | { type: "error"; code: string; message: string };

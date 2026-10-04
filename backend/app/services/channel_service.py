@@ -2,6 +2,7 @@
 
 import logging
 
+from redis.asyncio import Redis
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +12,7 @@ from app.models import Channel, User
 from app.realtime.presence import PresenceStore
 from app.repositories.channels import ChannelRepository, ChannelRow, MemberRow
 from app.schemas.channel import ChannelCreate, ChannelOut, ChannelUpdate, MemberOut
+from app.services import notification_service
 from app.storage.local import LocalStorage, StorageError
 
 logger = logging.getLogger("app.channels")
@@ -75,7 +77,7 @@ async def create_channel(session: AsyncSession, user: User, data: ChannelCreate)
     return to_out(channel, member_count=1, is_member=True, viewer_id=user.id)
 
 
-async def join_channel(session: AsyncSession, user: User, channel_id: int) -> ChannelOut:
+async def join_channel(session: AsyncSession, redis: Redis, user: User, channel_id: int) -> ChannelOut:
     repo = ChannelRepository(session)
     channel = await repo.get(channel_id)
     if channel is None:
@@ -84,6 +86,14 @@ async def join_channel(session: AsyncSession, user: User, channel_id: int) -> Ch
     await session.commit()
     if created:
         logger.info("channel_joined", extra={"channel_id": channel_id, "user_id": user.id})
+        await notification_service.notify_channel_joined(
+            session,
+            redis,
+            user_id=user.id,
+            username=user.username,
+            channel_id=channel_id,
+            channel_name=channel.name,
+        )
     return to_out(
         channel,
         member_count=await repo.member_count(channel_id),

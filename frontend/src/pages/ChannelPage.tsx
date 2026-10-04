@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { API_BASE } from "../api/client";
 import { channelApi } from "../api/endpoints";
@@ -24,6 +30,12 @@ export function ChannelPage() {
   const { session, state } = useChannelSession(id, user!.id);
   const [localNotice, setLocalNotice] = useState<string | null>(null);
   const listRef = useRef<HTMLUListElement>(null);
+  const atBottomRef = useRef(true);
+  const prependRef = useRef<{
+    height: number;
+    top: number;
+    firstKey: string | null;
+  } | null>(null);
   const [channel, setChannel] = useState<Channel | null>(null);
   const [manageChannel, setManageChannel] = useState<Channel | null>(null);
 
@@ -52,10 +64,54 @@ export function ChannelPage() {
     void recorder.start();
   }, [session, recorder]);
 
-  // Keep the newest message in view.
+  const firstKey = state.messages[0]?.key ?? null;
+
+  // Keep the newest message in view, but only when the user is at the bottom.
   useEffect(() => {
-    listRef.current?.lastElementChild?.scrollIntoView({ block: "nearest" });
+    const list = listRef.current;
+    if (!list) return;
+    if (atBottomRef.current) {
+      list.lastElementChild?.scrollIntoView({ block: "nearest" });
+    }
   }, [state.messages.length]);
+
+  // After older messages are prepended, keep the viewport anchored where it was.
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    const snap = prependRef.current;
+    if (!list || !snap) return;
+    prependRef.current = null;
+    if (firstKey !== null && firstKey !== snap.firstKey) {
+      list.scrollTop = list.scrollHeight - snap.height + snap.top;
+    }
+  }, [firstKey]);
+
+  const onScroll = useCallback(() => {
+    const list = listRef.current;
+    if (!list) return;
+    atBottomRef.current =
+      list.scrollHeight - list.scrollTop - list.clientHeight <= 60;
+    if (
+      list.scrollTop > 80 ||
+      state.loading ||
+      state.loadingOlder ||
+      !state.hasMore
+    )
+      return;
+    prependRef.current = {
+      height: list.scrollHeight,
+      top: list.scrollTop,
+      firstKey: state.messages[0]?.key ?? null,
+    };
+    void session?.loadOlder();
+  }, [session, state.loading, state.loadingOlder, state.hasMore, state.messages]);
+
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    list.addEventListener("scroll", onScroll, { passive: true });
+    return () => list.removeEventListener("scroll", onScroll);
+  }, [onScroll]);
 
   const { playback } = state;
   const playbackPrefix = "Couldn't play the message from ";
@@ -166,7 +222,13 @@ export function ChannelPage() {
           <p className="muted center">{t("loadingMessages")}</p>
         ) : (
           <ul className="messages" ref={listRef} data-testid="messages">
-            {state.messages.length === 0 && (
+            {state.loadingOlder && (
+              <li className="messages__older" aria-live="polite">
+                <span className="spinner" aria-hidden="true" />
+                {t("loadingOlder")}
+              </li>
+            )}
+            {state.messages.length === 0 && !state.loadingOlder && (
               <li className="muted center">{t("noMessages")}</li>
             )}
             {state.messages.map((m) => (

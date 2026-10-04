@@ -3,10 +3,9 @@ from typing import Annotated
 from fastapi import APIRouter, File, UploadFile, status
 from fastapi.responses import FileResponse
 
-from app.api.deps import CurrentUser, PresenceDep, SessionDep, StorageDep
+from app.api.deps import CurrentUser, PresenceDep, RedisDep, SessionDep, StorageDep
 from app.core.errors import NotFound
 from app.repositories.channels import ChannelRepository
-from app.repositories.users import UserRepository
 from app.schemas.channel import ChannelCreate, ChannelOut, ChannelUpdate, MemberOut
 from app.services import channel_service
 from app.storage.local import LocalStorage
@@ -75,8 +74,10 @@ async def upload_channel_image(
 
 
 @router.post("/{channel_id}/join", response_model=ChannelOut)
-async def join_channel(channel_id: int, user: CurrentUser, session: SessionDep) -> ChannelOut:
-    return await channel_service.join_channel(session, user, channel_id)
+async def join_channel(
+    channel_id: int, user: CurrentUser, session: SessionDep, redis: RedisDep
+) -> ChannelOut:
+    return await channel_service.join_channel(session, redis, user, channel_id)
 
 
 @router.get("/{channel_id}/members", response_model=list[MemberOut])

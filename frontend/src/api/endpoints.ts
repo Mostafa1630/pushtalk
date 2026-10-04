@@ -4,7 +4,10 @@ import type {
   Member,
   MessageDTO,
   MessagePage,
+  NotificationDTO,
+  NotificationPage,
   TokenResponse,
+  UnreadCount,
   User,
 } from "./types";
 
@@ -62,14 +65,16 @@ export const channelApi = {
 };
 
 export const messageApi = {
-  /** Latest page of history (no cursor) or catch-up after a known seq. */
+  /** Latest page of history (no cursor), catch-up after a known seq, or the older page before a seq. */
   list: (
     channelId: number,
-    params: { afterSeq?: number; limit?: number } = {},
+    params: { afterSeq?: number; beforeSeq?: number; limit?: number } = {},
   ) => {
     const q = new URLSearchParams();
     if (params.afterSeq !== undefined)
       q.set("after_seq", String(params.afterSeq));
+    if (params.beforeSeq !== undefined)
+      q.set("before_seq", String(params.beforeSeq));
     if (params.limit !== undefined) q.set("limit", String(params.limit));
     const qs = q.toString();
     return apiJson<MessagePage>(
@@ -93,4 +98,21 @@ export const messageApi = {
   /** Protected media: fetched with the bearer token, never a public URL. */
   audio: (messageId: string, signal?: AbortSignal) =>
     apiBlob(`/messages/${messageId}/audio`, signal),
+};
+
+export const notificationApi = {
+  /** Newest page, or the older page before a notification id. */
+  list: (params: { beforeId?: number; limit?: number } = {}) => {
+    const q = new URLSearchParams();
+    if (params.beforeId !== undefined)
+      q.set("before_id", String(params.beforeId));
+    if (params.limit !== undefined) q.set("limit", String(params.limit));
+    const qs = q.toString();
+    return apiJson<NotificationPage>(`/notifications${qs ? `?${qs}` : ""}`);
+  },
+  unreadCount: () => apiJson<UnreadCount>("/notifications/unread-count"),
+  markRead: (id: number) =>
+    apiJson<NotificationDTO>(`/notifications/${id}/read`, { method: "POST" }),
+  markAllRead: () =>
+    apiJson<UnreadCount>("/notifications/read-all", { method: "POST" }),
 };

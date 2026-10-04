@@ -14,6 +14,8 @@ const EMPTY: SessionState = {
   isLeader: false,
   fatalError: null,
   notice: null,
+  loadingOlder: false,
+  hasMore: false,
 };
 
 const noopSubscribe = () => () => {};

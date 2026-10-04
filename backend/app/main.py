@@ -11,7 +11,7 @@ from arq.connections import RedisSettings
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import auth, channels, health, media, messages, users, ws
+from app.api.routes import auth, channels, health, media, messages, notifications, users, ws
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.logging import configure_logging, request_id_var
@@ -90,6 +90,7 @@ def create_app() -> FastAPI:
     app.include_router(users.router, prefix=api_prefix)
     app.include_router(channels.router, prefix=api_prefix)
     app.include_router(messages.router, prefix=api_prefix)
+    app.include_router(notifications.router, prefix=api_prefix)
     app.include_router(media.router, prefix=api_prefix)
     app.include_router(ws.router, prefix=api_prefix)
     return app

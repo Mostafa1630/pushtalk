@@ -30,10 +30,11 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.audio import ffmpeg
 from app.core.config import Settings
-from app.models import Message, MessageStatus, User
+from app.models import Channel, Message, MessageStatus, User
 from app.realtime import events
 from app.repositories.channels import ChannelRepository
 from app.repositories.messages import MessageRepository
+from app.services import notification_service
 from app.services.message_service import to_out
 from app.storage.local import LocalStorage, StorageError
 
@@ -188,6 +189,7 @@ async def _publish_ready(ctx: dict[str, Any], mid: uuid.UUID, channel_id: int) -
             )
         ).one()
         message, username, avatar_path = row
+        channel = await session.get(Channel, channel_id)
         recipients = max(await ChannelRepository(session).member_count(channel_id) - 1, 0)
         out = to_out(
             message,
@@ -196,6 +198,16 @@ async def _publish_ready(ctx: dict[str, Any], mid: uuid.UUID, channel_id: int) -
             viewer_id=message.sender_id,
             recipients=recipients,
         )
+        if channel is not None and channel.created_by is not None:
+            await notification_service.notify_channel_message(
+                session,
+                ctx["redis"],
+                owner_id=channel.created_by,
+                channel_id=channel_id,
+                channel_name=channel.name,
+                sender_id=message.sender_id,
+                sender_username=username,
+            )
     await events.publish_event(ctx["redis"], channel_id, events.message_new(out))
 
 

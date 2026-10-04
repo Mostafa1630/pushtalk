@@ -141,7 +141,7 @@ input {
 }
 .profile-menu-wrap {
   position: relative;
-  order: 2;
+  order: 3;
 }
 .profile-trigger {
   width: 42px;
@@ -190,6 +190,168 @@ input {
 }
 .profile-menu .profile-menu__logout {
   color: var(--danger);
+}
+.notifications-wrap {
+  position: relative;
+  order: 2;
+}
+.notifications-trigger {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+}
+.notifications-trigger:hover {
+  background: #f3f4f6;
+  color: var(--text);
+}
+.notifications-badge {
+  position: absolute;
+  inset-block-start: 2px;
+  inset-inline-end: 0;
+  display: grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  border: 2px solid #fff;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 0.66rem;
+  font-weight: 700;
+  line-height: 1;
+}
+.notifications-panel {
+  position: absolute;
+  z-index: 10;
+  inset-block-start: calc(100% + 0.5rem);
+  inset-inline-end: 0;
+  width: min(340px, calc(100vw - 1.5rem));
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 12px 28px #1118271a;
+  overflow: hidden;
+}
+.notifications-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.65rem 0.8rem;
+  border-bottom: 1px solid var(--border);
+}
+.notifications-read-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--primary);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+.notifications-read-all:hover {
+  background: var(--primary-soft);
+}
+.notifications-list {
+  max-height: min(380px, 60vh);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.notifications-item {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+.notifications-item:last-child {
+  border-bottom: 0;
+}
+.notifications-item--unread {
+  background: var(--primary-soft);
+}
+.notifications-item__main {
+  display: flex;
+  flex: 1;
+  align-items: flex-start;
+  gap: 0.55rem;
+  min-width: 0;
+  padding: 0.6rem 0.6rem 0.6rem 0.7rem;
+  text-align: start;
+  border: 0;
+  background: transparent;
+}
+.notifications-item__main:hover {
+  background: #f3f4f6;
+}
+.notifications-item--unread .notifications-item__main:hover {
+  background: var(--primary-100);
+}
+.notifications-item__icon {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  margin-top: 1px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--primary);
+}
+.notifications-item__body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+.notifications-item__text {
+  font-size: 0.84rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.notifications-item--unread .notifications-item__text {
+  font-weight: 600;
+}
+.notifications-item__time {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+.notifications-item__read {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  margin-inline-end: 0.55rem;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: #fff;
+  color: var(--primary);
+}
+.notifications-item__read:hover {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.notifications-hint {
+  padding: 0.9rem;
+  font-size: 0.85rem;
+  text-align: center;
+  color: var(--muted);
 }
 .modal-backdrop {
   position: fixed;
@@ -829,6 +991,28 @@ textarea.input--invalid:focus {
   align-content: start;
   background-color: #f1f5f4;
 }
+.messages__older {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+.spinner {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  border: 2px solid var(--primary-300);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 700ms linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
 .message {
   display: flex;
   align-items: flex-start;
@@ -1007,12 +1191,28 @@ textarea.input--invalid:focus {
   box-shadow: none;
   animation: toast-reveal 280ms ease-out both;
 }
+/* Language switch: content reveals from the new language's reading side. */
+.app-shell--locale-ltr {
+  --locale-from-x: -16px;
+}
+.app-shell--locale-rtl {
+  --locale-from-x: 16px;
+}
 .app-shell--locale-change .topbar,
 .app-shell--locale-change .page > .card,
+.app-shell--locale-change .auth-card,
 .app-shell--locale-change .channel-header,
 .app-shell--locale-change .messages,
 .app-shell--locale-change .channel-footer {
-  animation: locale-reveal 180ms ease-out both;
+  animation: locale-reveal 420ms cubic-bezier(0.21, 0.88, 0.24, 1) both;
+}
+/* A short cascade: header first, then the body, then the footer. */
+.app-shell--locale-change .page > .card:nth-child(2),
+.app-shell--locale-change .messages {
+  animation-delay: 55ms;
+}
+.app-shell--locale-change .channel-footer {
+  animation-delay: 110ms;
 }
 .channel-row--new {
   animation: channel-reveal 260ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
@@ -1023,12 +1223,14 @@ textarea.input--invalid:focus {
 
 @keyframes locale-reveal {
   from {
-    opacity: 0.88;
-    transform: translateY(2px);
+    opacity: 0;
+    transform: translateX(var(--locale-from-x, 0px)) scale(0.995);
+    filter: blur(5px);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateX(0) scale(1);
+    filter: blur(0);
   }
 }
 @keyframes channel-reveal {
@@ -1065,6 +1267,7 @@ textarea.input--invalid:focus {
 @media (prefers-reduced-motion: reduce) {
   .app-shell--locale-change .topbar,
   .app-shell--locale-change .page > .card,
+  .app-shell--locale-change .auth-card,
   .app-shell--locale-change .channel-header,
   .app-shell--locale-change .messages,
   .app-shell--locale-change .channel-footer,

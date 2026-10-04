@@ -87,7 +87,7 @@ async def clean_tables() -> AsyncIterator[None]:
     yield
     async with engine.begin() as conn:
         await conn.execute(
-            text("TRUNCATE message_receipts, messages, channel_members, channels, users RESTART IDENTITY CASCADE")
+            text("TRUNCATE notifications, message_receipts, messages, channel_members, channels, users RESTART IDENTITY CASCADE")
         )
 
 

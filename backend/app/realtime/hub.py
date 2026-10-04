@@ -18,7 +18,7 @@ from typing import Any
 
 from redis.asyncio import Redis
 
-from app.realtime.events import CHANNEL_TOPIC_PREFIX, EVT_RESYNC
+from app.realtime.events import CHANNEL_TOPIC_PREFIX, EVT_RESYNC, USER_TOPIC_PREFIX
 
 logger = logging.getLogger("app.realtime.hub")
 
@@ -54,6 +54,9 @@ class RealtimeHub:
     def __init__(self, redis: Redis) -> None:
         self.redis = redis
         self._connections: dict[int, set[ClientConnection]] = defaultdict(set)
+        # Same connections indexed by user: user-level events (notifications)
+        # must reach every socket a user has open, whatever channel it is on.
+        self._user_connections: dict[int, set[ClientConnection]] = defaultdict(set)
         self._task: asyncio.Task[None] | None = None
         self._subscribed = asyncio.Event()
 
@@ -82,6 +85,7 @@ class RealtimeHub:
 
     def register(self, conn: ClientConnection) -> None:
         self._connections[conn.channel_id].add(conn)
+        self._user_connections[conn.user_id].add(conn)
 
     def unregister(self, conn: ClientConnection) -> None:
         conns = self._connections.get(conn.channel_id)
@@ -89,12 +93,21 @@ class RealtimeHub:
             conns.discard(conn)
             if not conns:
                 del self._connections[conn.channel_id]
+        user_conns = self._user_connections.get(conn.user_id)
+        if user_conns is not None:
+            user_conns.discard(conn)
+            if not user_conns:
+                del self._user_connections[conn.user_id]
 
     def connection_count(self) -> int:
         return sum(len(c) for c in self._connections.values())
 
     def _dispatch(self, channel_id: int, event: dict[str, Any]) -> None:
         for conn in list(self._connections.get(channel_id, ())):
+            conn.offer(event)
+
+    def _dispatch_user(self, user_id: int, event: dict[str, Any]) -> None:
+        for conn in list(self._user_connections.get(user_id, ())):
             conn.offer(event)
 
     def _broadcast_resync(self) -> None:
@@ -107,7 +120,7 @@ class RealtimeHub:
         while True:
             pubsub = self.redis.pubsub(ignore_subscribe_messages=True)
             try:
-                await pubsub.psubscribe(f"{CHANNEL_TOPIC_PREFIX}*")
+                await pubsub.psubscribe(f"{CHANNEL_TOPIC_PREFIX}*", f"{USER_TOPIC_PREFIX}*")
                 self._subscribed.set()
                 logger.info("hub_subscribed", extra={"recovered": had_failure})
                 if had_failure:
@@ -116,13 +129,16 @@ class RealtimeHub:
                 async for raw in pubsub.listen():
                     if raw.get("type") != "pmessage":
                         continue
+                    topic = str(raw["channel"])
                     try:
-                        channel_id = int(str(raw["channel"]).removeprefix(CHANNEL_TOPIC_PREFIX))
                         event = json.loads(raw["data"])
+                        if topic.startswith(USER_TOPIC_PREFIX):
+                            self._dispatch_user(int(topic.removeprefix(USER_TOPIC_PREFIX)), event)
+                        else:
+                            self._dispatch(int(topic.removeprefix(CHANNEL_TOPIC_PREFIX)), event)
                     except (ValueError, TypeError, json.JSONDecodeError):
                         logger.warning("hub_bad_payload")
                         continue
-                    self._dispatch(channel_id, event)
             except asyncio.CancelledError:
                 await pubsub.aclose()
                 raise

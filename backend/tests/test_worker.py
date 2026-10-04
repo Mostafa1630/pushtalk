@@ -50,7 +50,12 @@ async def _reload(mid: uuid.UUID) -> Message:
 
 
 def _events(fake_redis: FakeRedis) -> list[dict[str, Any]]:
-    return [json.loads(data) for _, data in fake_redis.published]
+    # Only channel broadcasts (user-topic notification publishes are covered in test_notifications).
+    return [
+        json.loads(data)
+        for topic, data in fake_redis.published
+        if topic.startswith("pushtalk:channel:")
+    ]
 
 
 async def test_success_normalizes_extracts_metadata_and_broadcasts(
@@ -71,14 +76,15 @@ async def test_success_normalizes_extracts_metadata_and_broadcasts(
     [event] = _events(fake_redis)
     assert event["type"] == "message.new"
     assert event["message"]["id"] == str(mid) and event["message"]["seq"] == 1
-    assert fake_redis.published[0][0] == f"pushtalk:channel:{channel['id']}"
+    channel_topics = [t for t, _ in fake_redis.published if t.startswith("pushtalk:channel:")]
+    assert channel_topics == [f"pushtalk:channel:{channel['id']}"]
 
 
 async def test_nothing_is_broadcast_before_processing_succeeds(
     client, alice, channel, fake_redis, make_audio
 ) -> None:  # type: ignore[no-untyped-def]
     await _upload(client, alice["access_token"], channel["id"], make_audio("ok1.webm", 1.0))
-    assert fake_redis.published == []  # upload alone never reaches other members
+    assert _events(fake_redis) == []  # upload alone never reaches other members
 
 
 async def test_undecodable_audio_marks_failed_and_notifies_sender(
@@ -130,7 +136,7 @@ async def test_duplicate_job_run_is_a_noop(client, alice, channel, ctx, fake_red
     assert await tasks.process_message(ctx, str(mid)) == "ready"
     assert await tasks.process_message(ctx, str(mid)) == "skipped"  # e.g. arq re-ran after a crash
     assert (await _reload(mid)).seq == 1
-    assert len(fake_redis.published) == 1  # broadcast exactly once
+    assert len(_events(fake_redis)) == 1  # broadcast exactly once
 
 
 async def test_broadcast_order_follows_upload_order_even_if_older_job_is_slower(

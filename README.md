@@ -6,10 +6,9 @@ everyone else in the channel hears it automatically, one message at a time, in o
 **Stack:** Python 3.12 · FastAPI · SQLAlchemy 2 (async) · Alembic · PostgreSQL 16 · Redis 7 (pub/sub + arq job queue) ·
 ffmpeg · React 19 + TypeScript · Vite · nginx · Docker Compose.
 
-Design reasoning lives in [DECISIONS.md](DECISIONS.md). AI disclosure and related notes live under
-[docs/ai/](docs/ai/). What was actually verified (and what was not) is in
-[docs/VERIFICATION.md](docs/VERIFICATION.md). The long-form study guide is
-[docs/PushTalk_Project_Guide.pdf](docs/PushTalk_Project_Guide.pdf).
+Design reasoning lives in [DECISIONS.md](DECISIONS.md). AI disclosure lives under
+[docs/ai/](docs/ai/). What was actually verified is in
+[docs/VERIFICATION.md](docs/VERIFICATION.md).
 
 ---
 
@@ -290,3 +289,4 @@ cd frontend && npm install && npm run dev        # http://localhost:5173
 - If Redis goes away, the arq worker process exits and relies on Docker's `restart: unless-stopped`.
 - Auto-play of catch-up messages uses a 5-minute age window measured with the client clock (clock skew shifts it).
 - The microphone stays open while a channel page is open (instant push-to-talk; the browser shows the mic indicator).
+

@@ -10,6 +10,7 @@ import { API_BASE, ApiError } from "../api/client";
 import { channelApi } from "../api/endpoints";
 import type { Channel } from "../api/types";
 import { useLanguage } from "../i18n";
+import { notificationFeed } from "../notifications/NotificationFeed";
 import { channelSchema, validateForm } from "../validation";
 
 const DEFAULT_CHANNEL_IMAGE = "/images/channel-community.jpg";
@@ -118,7 +119,12 @@ export function ChannelsPage() {
   const join = async (ch: Channel) => {
     setError(null);
     try {
-      if (!ch.is_member) await channelApi.join(ch.id);
+      if (!ch.is_member) {
+        await channelApi.join(ch.id);
+        // The join itself creates a notification; no socket was open to
+        // push it, so pull the badge count now.
+        void notificationFeed.refreshCount();
+      }
       navigate(`/channels/${ch.id}`);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : t("channelJoinError"));

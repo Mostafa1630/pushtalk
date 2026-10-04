@@ -16,6 +16,7 @@ import {
 import { API_BASE } from "./api/client";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LanguageProvider, useLanguage } from "./i18n";
+import { NotificationsMenu } from "./components/NotificationsMenu";
 import { ScrollToTopButton } from "./components/ScrollToTopButton";
 
 const ProfileDialog = lazy(() =>
@@ -77,6 +78,7 @@ function TopBar() {
     <header className="topbar">
       <span className="brand">{t("appName")}</span>
       <div className="topbar__actions">
+        <NotificationsMenu />
         {user && (
           <div className="profile-menu-wrap">
             <button
@@ -209,19 +211,20 @@ function TopBar() {
 function AppRoutes() {
   const { language, t } = useLanguage();
   const previousLanguage = useRef(language);
-  const [localeMotion, setLocaleMotion] = useState(false);
+  const [localeMotion, setLocaleMotion] = useState<"ltr" | "rtl" | null>(null);
 
   useEffect(() => {
     if (previousLanguage.current === language) return;
     previousLanguage.current = language;
-    setLocaleMotion(true);
-    const timer = window.setTimeout(() => setLocaleMotion(false), 220);
+    // The content slides in from the reading-start side of the new language.
+    setLocaleMotion(language === "ar" ? "rtl" : "ltr");
+    const timer = window.setTimeout(() => setLocaleMotion(null), 560);
     return () => window.clearTimeout(timer);
   }, [language]);
 
   return (
     <div
-      className={`app-shell${localeMotion ? " app-shell--locale-change" : ""}`}
+      className={`app-shell${localeMotion ? ` app-shell--locale-change app-shell--locale-${localeMotion}` : ""}`}
     >
       <TopBar />
       <Suspense fallback={<p className="muted center">{t("loading")}</p>}>
