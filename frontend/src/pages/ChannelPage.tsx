@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -17,6 +18,7 @@ import { MessageItem } from "../components/MessageItem";
 import { PushToTalkButton } from "../components/PushToTalkButton";
 import { useChannelSession } from "../hooks/useChannelSession";
 import { useLanguage } from "../i18n";
+import { daySeparator } from "../messages/dateSeparators";
 import { useRecorder } from "../recording/useRecorder";
 
 const DEFAULT_CHANNEL_IMAGE = "/images/channel-community.jpg";
@@ -129,6 +131,7 @@ export function ChannelPage() {
     ? t("playbackError", { name: playbackSender || t("members") })
     : state.notice;
   const queuedIds = new Set(playback.queued.map((q) => q.id));
+  const now = new Date();
   const blocked = playback.paused.includes("blocked");
   const unheard = state.messages.filter(
     (m) => m.unheard && m.senderId !== user!.id,
@@ -168,7 +171,11 @@ export function ChannelPage() {
           />
           <div className="channel-header__identity">
             <h2 className="channel-title">
-              {channel ? `#${channel.name}` : ""}
+              {channel
+                ? channel.is_direct
+                  ? `@${channel.name}`
+                  : `#${channel.name}`
+                : ""}
             </h2>
             {channel?.description && <p>{channel.description}</p>}
           </div>
@@ -176,7 +183,7 @@ export function ChannelPage() {
             state={state.connection}
             retryInMs={state.retryInMs}
           />
-          {channel?.is_owner && (
+          {channel?.is_owner && !channel?.is_direct && (
             <button
               type="button"
               className="icon-button channel-header__settings"
@@ -231,18 +238,41 @@ export function ChannelPage() {
             {state.messages.length === 0 && !state.loadingOlder && (
               <li className="muted center">{t("noMessages")}</li>
             )}
-            {state.messages.map((m) => (
-              <MessageItem
-                key={m.key}
-                message={m}
-                isOwn={m.senderId === user!.id}
-                isAdmin={m.senderId === channel?.created_by}
-                isPlaying={playback.current?.id === m.id && m.id !== null}
-                isQueued={m.id !== null && queuedIds.has(m.id)}
-                onPlay={() => session?.playMessage(m.key)}
-                onRetry={() => void session?.retryUpload(m.key)}
-              />
-            ))}
+            {state.messages.map((m, index) => {
+              const separator = daySeparator(
+                m.createdAt,
+                state.messages[index - 1]?.createdAt ?? null,
+                language,
+                now,
+              );
+              // role="separator" drops the text from the a11y tree, so name it.
+              const day = separator
+                ? separator.kind === "label"
+                  ? t(separator.key)
+                  : separator.text
+                : null;
+              return (
+                <Fragment key={m.key}>
+                  {day && (
+                    <li className="messages__day" role="separator" aria-label={day}>
+                      {day}
+                    </li>
+                  )}
+                  <MessageItem
+                    message={m}
+                    isOwn={m.senderId === user!.id}
+                    isAdmin={m.senderId === channel?.created_by}
+                    isPlaying={playback.current?.id === m.id && m.id !== null}
+                    isPaused={playback.userPaused}
+                    isQueued={m.id !== null && queuedIds.has(m.id)}
+                    rate={state.playbackRate}
+                    onTogglePlay={() => session?.togglePlayback(m.key)}
+                    onCycleRate={() => session?.cyclePlaybackRate()}
+                    onRetry={() => void session?.retryUpload(m.key)}
+                  />
+                </Fragment>
+              );
+            })}
           </ul>
         )}
 

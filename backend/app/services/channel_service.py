@@ -7,10 +7,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import Conflict, Forbidden, NotFound, PayloadTooLarge, ServiceUnavailable, UnsupportedMedia
-from app.images import MAX_IMAGE_BYTES, extension_for, sniff_image
+from app.images import MAX_IMAGE_BYTES, avatar_url_for, extension_for, sniff_image
 from app.models import Channel, User
 from app.realtime.presence import PresenceStore
 from app.repositories.channels import ChannelRepository, ChannelRow, MemberRow
+from app.repositories.users import UserRepository
 from app.schemas.channel import ChannelCreate, ChannelOut, ChannelUpdate, MemberOut
 from app.services import notification_service
 from app.storage.local import LocalStorage, StorageError
@@ -22,21 +23,28 @@ def _image_url(channel: Channel) -> str | None:
     return f"/api/channels/{channel.id}/image" if channel.image_path else None
 
 
-def _avatar_url(user_id: int, avatar_path: str | None) -> str | None:
-    return f"/api/users/{user_id}/avatar" if avatar_path else None
-
-
-def to_out(channel: Channel, *, member_count: int, is_member: bool, viewer_id: int) -> ChannelOut:
+def to_out(
+    channel: Channel,
+    *,
+    member_count: int,
+    is_member: bool,
+    viewer_id: int,
+    name: str | None = None,
+    image_url: str | None = None,
+    dm_user_id: int | None = None,
+) -> ChannelOut:
     return ChannelOut(
         id=channel.id,
-        name=channel.name,
+        name=name if name is not None else channel.name,
         description=channel.description or "",
         created_at=channel.created_at,
         created_by=channel.created_by,
         member_count=member_count,
         is_member=is_member,
-        is_owner=channel.created_by == viewer_id,
-        image_url=_image_url(channel),
+        is_owner=channel.created_by == viewer_id and not channel.is_direct,
+        image_url=image_url if image_url is not None else _image_url(channel),
+        is_direct=channel.is_direct,
+        dm_user_id=dm_user_id,
     )
 
 
@@ -49,16 +57,92 @@ async def list_channels(session: AsyncSession, user: User) -> list[ChannelOut]:
     return [_from_row(r, user.id) for r in rows]
 
 
+async def list_direct_channels(session: AsyncSession, user: User) -> list[ChannelOut]:
+    repo = ChannelRepository(session)
+    rows = await repo.list_dms(user.id)
+    return [
+        to_out(
+            r.channel,
+            member_count=2,
+            is_member=True,
+            viewer_id=user.id,
+            name=r.other_username,
+            image_url=avatar_url_for(r.other_user_id, r.other_avatar_path),
+            dm_user_id=r.other_user_id,
+        )
+        for r in rows
+    ]
+
+
 async def get_channel(session: AsyncSession, user: User, channel_id: int) -> ChannelOut:
     repo = ChannelRepository(session)
     channel = await repo.get(channel_id)
     if channel is None:
         raise NotFound("Channel not found", code="CHANNEL_NOT_FOUND")
+    is_member = await repo.is_member(channel_id, user.id)
+    if channel.is_direct and not is_member:
+        raise NotFound("Channel not found", code="CHANNEL_NOT_FOUND")
+
+    dm_name = None
+    dm_image = None
+    dm_user_id = None
+    if channel.is_direct:
+        other = await repo.get_dm_other_member(channel_id, user.id)
+        if other:
+            dm_user_id, other_username, other_avatar_path = other
+            dm_name = other_username
+            dm_image = avatar_url_for(dm_user_id, other_avatar_path)
+
     return to_out(
         channel,
         member_count=await repo.member_count(channel_id),
-        is_member=await repo.is_member(channel_id, user.id),
+        is_member=is_member,
         viewer_id=user.id,
+        name=dm_name,
+        image_url=dm_image,
+        dm_user_id=dm_user_id,
+    )
+
+
+async def create_or_get_dm(
+    session: AsyncSession,
+    user: User,
+    *,
+    target_user_id: int | None = None,
+    target_username: str | None = None,
+) -> ChannelOut:
+    user_repo = UserRepository(session)
+    target = None
+    if target_user_id is not None:
+        target = await user_repo.get(target_user_id)
+    elif target_username is not None:
+        target = await user_repo.get_by_username(target_username)
+
+    if target is None:
+        raise NotFound("User not found", code="USER_NOT_FOUND")
+    if target.id == user.id:
+        raise Conflict("Cannot message yourself", code="SELF_DM_NOT_ALLOWED")
+
+    repo = ChannelRepository(session)
+    channel = await repo.get_dm_channel(user.id, target.id)
+    if channel is None:
+        try:
+            channel = await repo.create_dm_channel(user.id, target.id)
+            await session.commit()
+        except IntegrityError:
+            await session.rollback()
+            channel = await repo.get_dm_channel(user.id, target.id)
+            if channel is None:
+                raise
+
+    return to_out(
+        channel,
+        member_count=2,
+        is_member=True,
+        viewer_id=user.id,
+        name=target.username,
+        image_url=avatar_url_for(target.id, target.avatar_path),
+        dm_user_id=target.id,
     )
 
 
@@ -82,6 +166,8 @@ async def join_channel(session: AsyncSession, redis: Redis, user: User, channel_
     channel = await repo.get(channel_id)
     if channel is None:
         raise NotFound("Channel not found", code="CHANNEL_NOT_FOUND")
+    if channel.is_direct:
+        raise Forbidden("Cannot join a direct message channel", code="DM_JOIN_FORBIDDEN")
     created = await repo.add_member(channel_id, user.id)
     await session.commit()
     if created:
@@ -114,6 +200,8 @@ async def require_member_channel(session: AsyncSession, user_id: int, channel_id
 
 async def require_owner_channel(session: AsyncSession, user: User, channel_id: int) -> Channel:
     channel = await require_member_channel(session, user.id, channel_id)
+    if channel.is_direct:
+        raise Forbidden("Direct message channels cannot be modified", code="DM_MODIFY_FORBIDDEN")
     if channel.created_by != user.id:
         raise Forbidden("Only the channel creator can do this", code="NOT_CHANNEL_OWNER")
     return channel
@@ -202,5 +290,5 @@ def _member_out(m: MemberRow, online: bool) -> MemberOut:
         username=m.username,
         joined_at=m.joined_at,
         online=online,
-        avatar_url=_avatar_url(m.user_id, m.avatar_path),
+        avatar_url=avatar_url_for(m.user_id, m.avatar_path),
     )

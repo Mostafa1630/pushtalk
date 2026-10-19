@@ -24,6 +24,8 @@ export interface Channel {
   is_member: boolean;
   is_owner: boolean;
   image_url: string | null;
+  is_direct?: boolean;
+  dm_user_id?: number | null;
 }
 
 export interface Member {
@@ -53,6 +55,7 @@ export interface MessageDTO {
   seq: number | null;
   duration_ms: number | null;
   waveform: number[] | null;
+  transcript?: string | null;
   error_code: string | null;
   created_at: string;
   receipts: ReceiptSummary | null;
@@ -118,6 +121,7 @@ export type ServerEvent =
       kind: "delivered" | "played";
       receipts: ReceiptSummary;
     }
+  | { type: "message.transcript"; message_id: string; transcript: string }
   | { type: "presence"; online: number[] }
   | { type: "notification.new"; notification: NotificationDTO }
   | { type: "resync" }

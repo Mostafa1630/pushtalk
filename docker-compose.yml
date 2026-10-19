@@ -20,6 +20,7 @@ x-backend: &backend
     MEDIA_ROOT: /data/media
   volumes:
     - media:/data/media
+    - ./backend:/app
   restart: unless-stopped
 
 services:

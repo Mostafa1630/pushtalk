@@ -35,7 +35,8 @@ class LocalStorage:
 
     @staticmethod
     def avatar_key(user_id: int, ext: str) -> str:
-        return f"avatars/{user_id}.{ext}"
+        # Unique per upload: the token becomes the avatar URL's cache buster.
+        return f"avatars/{user_id}-{uuid.uuid4().hex[:10]}.{ext}"
 
     @staticmethod
     def channel_image_key(channel_id: int, ext: str) -> str:

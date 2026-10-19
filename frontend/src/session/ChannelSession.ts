@@ -22,6 +22,12 @@ import {
   type ChatMessage,
 } from "../messages/messageModel";
 import { acquirePlaybackLeadership } from "../playback/leader";
+import {
+  nextRate,
+  readStoredRate,
+  storeRate,
+  type PlaybackRate,
+} from "../playback/rate";
 import { notificationFeed } from "../notifications/NotificationFeed";
 import {
   PlaybackQueue,
@@ -50,6 +56,7 @@ export interface SessionState {
   connection: ConnectionState;
   retryInMs: number | null;
   playback: QueueSnapshot;
+  playbackRate: PlaybackRate;
   isLeader: boolean;
   fatalError: string | null;
   notice: string | null;
@@ -67,6 +74,7 @@ export class ChannelSession {
   private readonly keyById = new Map<string, string>();
   private sequencer = new MessageSequencer<MessageDTO & { seq: number }>();
   private readonly queue: PlaybackQueue;
+  private rate: PlaybackRate = readStoredRate();
   private socket: ChannelSocket | null = null;
   private releaseLeadership: () => void = () => {};
   private catchUpRunning = false;
@@ -93,6 +101,7 @@ export class ChannelSession {
       onError: (item) => this.onPlaybackError(item),
       onChange: (snapshot) => this.set({ playback: snapshot }),
     });
+    this.player.setRate(this.rate);
     this.state = {
       loading: true,
       messages: [],
@@ -101,6 +110,7 @@ export class ChannelSession {
       connection: "connecting",
       retryInMs: null,
       playback: this.queue.snapshot(),
+      playbackRate: this.rate,
       isLeader: false,
       fatalError: null,
       notice: null,
@@ -195,9 +205,14 @@ export class ChannelSession {
     this.queue.unlock();
   }
 
-  playMessage(key: string): void {
+  /** Play a message, or pause/resume it in place when it is already playing. */
+  togglePlayback(key: string): void {
     const m = this.byKey.get(key);
     if (!m || m.status !== "ready" || !m.id || m.seq === null) return;
+    if (this.state.playback.current?.id === m.id) {
+      this.queue.toggleCurrent();
+      return;
+    }
     this.queue.enqueue({
       id: m.id,
       seq: m.seq,
@@ -205,6 +220,14 @@ export class ChannelSession {
       durationMs: m.durationMs,
       manual: true,
     });
+  }
+
+  /** 1x -> 1.5x -> 2x -> 1x, for whatever plays from now on. */
+  cyclePlaybackRate(): void {
+    this.rate = nextRate(this.rate);
+    storeRate(this.rate);
+    this.queue.setRate(this.rate);
+    this.set({ playbackRate: this.rate });
   }
 
   playUnheard(): void {
@@ -234,6 +257,7 @@ export class ChannelSession {
       waveform: null,
       errorCode: null,
       errorMessage: null,
+      transcript: null,
       createdAt: new Date().toISOString(),
       receipts: null,
       playedByMe: false,
@@ -460,6 +484,12 @@ export class ChannelSession {
           this.queue.remove(event.message_id);
           if (m) this.upsert({ ...m, playedByMe: true, unheard: false });
         }
+        break;
+      }
+      case "message.transcript": {
+        const key = this.keyById.get(event.message_id);
+        const m = key ? this.byKey.get(key) : undefined;
+        if (m) this.upsert({ ...m, transcript: event.transcript });
         break;
       }
       case "presence":

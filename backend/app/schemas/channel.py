@@ -58,6 +58,13 @@ class ChannelOut(BaseModel):
     is_member: bool
     is_owner: bool
     image_url: str | None
+    is_direct: bool = False
+    dm_user_id: int | None = None
+
+
+class DirectChannelCreate(BaseModel):
+    user_id: int | None = None
+    username: str | None = None
 
 
 class MemberOut(BaseModel):

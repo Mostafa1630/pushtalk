@@ -10,6 +10,7 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Text,
     UniqueConstraint,
     func,
 )
@@ -60,6 +61,9 @@ class Message(CreatedAtMixin, Base):
     audio_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     waveform: Mapped[list[float] | None] = mapped_column(JSONB, nullable=True)
+
+    # --- transcription (second worker step, filled after delivery) ----------
+    transcript: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

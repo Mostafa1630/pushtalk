@@ -53,6 +53,28 @@ class Settings(BaseSettings):
     ws_auth_timeout_seconds: float = Field(default=5.0, alias="WS_AUTH_TIMEOUT_SECONDS")
     presence_ttl_seconds: int = Field(default=45, alias="PRESENCE_TTL_SECONDS")
 
+    # --- Transcription -----------------------------------------------------
+    # Second worker step, run only after the message is already `ready`: a slow
+    # or failing transcription can never delay or break delivery.
+    transcription_enabled: bool = Field(default=True, alias="TRANSCRIPTION_ENABLED")
+    # Must match the model baked into the image (see Dockerfile), otherwise the
+    # worker downloads it on first use and needs network access.
+    transcription_model: str = Field(default="base", alias="TRANSCRIPTION_MODEL")
+    transcription_model_dir: str = Field(default="/opt/whisper", alias="TRANSCRIPTION_MODEL_DIR")
+    transcription_timeout_seconds: float = Field(default=120.0, alias="TRANSCRIPTION_TIMEOUT_SECONDS")
+    # Whisper can repeat itself on a short clip; messages are capped at 60 s.
+    transcription_max_chars: int = Field(default=1000, alias="TRANSCRIPTION_MAX_CHARS")
+
+    # --- Rate limiting -----------------------------------------------------
+    rate_limit_enabled: bool = Field(default=True, alias="RATE_LIMIT_ENABLED")
+    # Sliding-ish fixed window per user (per IP before authentication).
+    rate_limit_requests: int = Field(default=120, alias="RATE_LIMIT_REQUESTS")
+    rate_limit_window_seconds: int = Field(default=60, alias="RATE_LIMIT_WINDOW_SECONDS")
+    # Voice uploads are far more expensive than reads, so they get their own
+    # smaller budget on the same window.
+    upload_limit_requests: int = Field(default=20, alias="UPLOAD_LIMIT_REQUESTS")
+    upload_limit_window_seconds: int = Field(default=60, alias="UPLOAD_LIMIT_WINDOW_SECONDS")
+
     @field_validator("jwt_secret")
     @classmethod
     def _secret_strength(cls, value: str) -> str:

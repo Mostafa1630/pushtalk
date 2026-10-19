@@ -12,7 +12,7 @@ from app.core.security import (
     hash_password,
     verify_password,
 )
-from app.images import MAX_IMAGE_BYTES, extension_for, sniff_image
+from app.images import MAX_IMAGE_BYTES, avatar_url_for, extension_for, sniff_image
 from app.models import User
 from app.repositories.users import UserRepository
 from app.schemas.auth import Credentials, PasswordChange, TokenOut, UserOut, UserUpdate
@@ -26,7 +26,7 @@ def user_out(user: User) -> UserOut:
     return UserOut(
         id=user.id,
         username=user.username,
-        avatar_url=f"/api/users/{user.id}/avatar" if user.avatar_path else None,
+        avatar_url=avatar_url_for(user.id, user.avatar_path),
     )
 
 

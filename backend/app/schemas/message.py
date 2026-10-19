@@ -23,6 +23,9 @@ class MessageOut(BaseModel):
     seq: int | None
     duration_ms: int | None
     waveform: list[float] | None
+    # Filled by a second worker step, so it can be missing at first and arrive
+    # later as a `message.transcript` event.
+    transcript: str | None = None
     error_code: str | None
     created_at: datetime
     # Only filled for the requesting user's own messages.

@@ -19,12 +19,7 @@
   --warn-bg: #fef3c7;
   --ok: #16a34a;
   --radius: 10px;
-  font-family:
-    system-ui,
-    -apple-system,
-    "Segoe UI",
-    Roboto,
-    sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   color: var(--text);
   background: var(--bg);
 }
@@ -999,6 +994,16 @@ textarea.input--invalid:focus {
   color: var(--muted);
   font-size: 0.8rem;
 }
+.messages__day {
+  justify-self: center;
+  padding: 0.2rem 0.7rem;
+  border-radius: 999px;
+  background: #ffffffd9;
+  box-shadow: 0 1px 1px #11182712;
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
 .spinner {
   width: 14px;
   height: 14px;
@@ -1082,6 +1087,32 @@ textarea.input--invalid:focus {
   font-size: 0.8rem;
   color: var(--muted);
   min-width: 3em;
+}
+.message__rate {
+  flex: 0 0 auto;
+  min-width: 2.9em;
+  padding: 0.1rem 0.35rem;
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.message__rate:hover:not(:disabled) {
+  border-color: var(--primary-300);
+  color: var(--primary);
+}
+.message__transcript {
+  margin: 0.4rem 0 0;
+  padding-top: 0.35rem;
+  border-top: 1px dashed rgba(0, 0, 0, 0.1);
+  font-size: 0.85rem;
+  line-height: 1.4;
+  color: inherit;
+  word-break: break-word;
+}
+.message--own .message__transcript {
+  border-top-color: rgba(255, 255, 255, 0.25);
 }
 .message__status {
   font-size: 0.78rem;

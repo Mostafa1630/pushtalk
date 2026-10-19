@@ -60,6 +60,9 @@ class FakeRedis:
 
     def __init__(self) -> None:
         self.published: list[tuple[str, str]] = []
+        self.enqueued_jobs: list[tuple[str, tuple[Any, ...], dict[str, Any]]] = []
+        self._data: dict[str, int] = {}
+        self._ttl: dict[str, int] = {}
 
     async def publish(self, channel: str, data: str) -> int:
         self.published.append((channel, data))
@@ -67,6 +70,22 @@ class FakeRedis:
 
     async def ping(self) -> bool:
         return True
+
+    async def enqueue_job(self, function: str, *args: Any, **kwargs: Any) -> Any:
+        self.enqueued_jobs.append((function, args, kwargs))
+        return None
+
+    async def incr(self, key: str) -> int:
+        val = self._data.get(key, 0) + 1
+        self._data[key] = val
+        return val
+
+    async def expire(self, key: str, seconds: int) -> bool:
+        self._ttl[key] = seconds
+        return True
+
+    async def ttl(self, key: str) -> int:
+        return self._ttl.get(key, -1)
 
 
 # ---------------------------------------------------------------------------

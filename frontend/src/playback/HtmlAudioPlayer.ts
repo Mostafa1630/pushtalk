@@ -14,9 +14,12 @@ export class HtmlAudioPlayer implements AudioPlayer {
   private readonly cache = new Map<string, Blob>();
   private objectUrl: string | null = null;
   private abort: AbortController | null = null;
+  private rate = 1;
 
   constructor() {
     this.audio.preload = "auto";
+    // Speeding up speech without raising its pitch.
+    this.audio.preservesPitch = true;
   }
 
   async play(item: QueueItem): Promise<void> {
@@ -34,6 +37,7 @@ export class HtmlAudioPlayer implements AudioPlayer {
       audio.onerror = () => reject(new Error("This audio message could not be decoded."));
       audio.src = this.objectUrl!;
       audio.currentTime = 0;
+      audio.playbackRate = this.rate;
       audio.play().catch((err: unknown) => {
         if (err instanceof DOMException && err.name === "NotAllowedError") reject(new AutoplayBlockedError());
         else if (err instanceof DOMException && err.name === "AbortError") {
@@ -41,6 +45,22 @@ export class HtmlAudioPlayer implements AudioPlayer {
         } else reject(err instanceof Error ? err : new Error("Playback failed"));
       });
     });
+  }
+
+  /** Hold the position; resume() carries on from here. */
+  pause(): void {
+    this.audio.pause();
+  }
+
+  resume(): void {
+    this.audio.play().catch(() => {
+      /* the queue's watchdog handles a stream that refuses to restart */
+    });
+  }
+
+  setRate(rate: number): void {
+    this.rate = rate;
+    this.audio.playbackRate = rate;
   }
 
   stop(): void {

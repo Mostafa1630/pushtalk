@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import BigInteger, DateTime, ForeignKey, Identity, String, func
+from sqlalchemy import BigInteger, Boolean, DateTime, ForeignKey, Identity, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, CreatedAtMixin
@@ -17,6 +17,7 @@ class Channel(CreatedAtMixin, Base):
     created_by: Mapped[int | None] = mapped_column(
         BigInteger, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
+    is_direct: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     # Per-channel sequence counter. The worker increments it under a row lock
     # when a message becomes ready, so every ready message gets a gap-free,
     # strictly increasing `seq` that defines the order clients play in.

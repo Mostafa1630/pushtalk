@@ -208,3 +208,46 @@ def test_compute_peaks_normalizes_to_loudest_bucket() -> None:
     pcm = struct.pack("<8h", 0, 100, -200, 50, 1000, -1000, 10, 0)
     assert ffmpeg.compute_peaks(pcm, 4) == [0.1, 0.2, 1.0, 0.01]
     assert ffmpeg.compute_peaks(b"", 3) == [0.0, 0.0, 0.0]
+
+
+async def test_transcribe_message_success(
+    client, alice, channel, ctx, fake_redis, make_audio, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    mid = await _upload(client, alice["access_token"], channel["id"], make_audio("ok1.webm", 1.0))
+    assert await tasks.process_message(ctx, str(mid)) == "ready"
+
+    from app.audio import transcription
+
+    async def fake_transcribe(*args: Any, **kwargs: Any) -> str:
+        return "Hello PushTalk voice message"
+
+    monkeypatch.setattr(transcription, "transcribe", fake_transcribe)
+    assert await tasks.transcribe_message(ctx, str(mid)) == "transcribed"
+
+    m = await _reload(mid)
+    assert m.transcript == "Hello PushTalk voice message"
+    transcripts = [e for e in _events(fake_redis) if e.get("type") == "message.transcript"]
+    assert len(transcripts) == 1
+    assert transcripts[0]["message_id"] == str(mid)
+    assert transcripts[0]["transcript"] == "Hello PushTalk voice message"
+
+
+async def test_transcribe_message_failure_leaves_message_ready(
+    client, alice, channel, ctx, fake_redis, make_audio, monkeypatch
+) -> None:  # type: ignore[no-untyped-def]
+    mid = await _upload(client, alice["access_token"], channel["id"], make_audio("ok1.webm", 1.0))
+    assert await tasks.process_message(ctx, str(mid)) == "ready"
+
+    from app.audio import transcription
+
+    async def fail_transcribe(*args: Any, **kwargs: Any) -> str:
+        raise transcription.TranscriptionError("model error")
+
+    monkeypatch.setattr(transcription, "transcribe", fail_transcribe)
+    assert await tasks.transcribe_message(ctx, str(mid)) == "failed"
+
+    m = await _reload(mid)
+    # The message is still ready and playable, only transcript is None
+    assert m.status == "ready"
+    assert m.transcript is None
+

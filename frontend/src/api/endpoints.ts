@@ -62,6 +62,9 @@ export const channelApi = {
   join: (id: number) =>
     apiJson<Channel>(`/channels/${id}/join`, { method: "POST" }),
   members: (id: number) => apiJson<Member[]>(`/channels/${id}/members`),
+  listDirect: () => apiJson<Channel[]>("/channels/direct"),
+  createDirect: (data: { user_id?: number; username?: string }) =>
+    apiJson<Channel>("/channels/direct", { method: "POST", json: data }),
 };
 
 export const messageApi = {

@@ -8,6 +8,9 @@ const OTHER = 2;
 class FakePlayer implements AudioPlayer {
   started: string[] = [];
   stops = 0;
+  pauses = 0;
+  resumes = 0;
+  rates: number[] = [];
   /** Every play() call, in order (the same id can be played twice). */
   calls: { id: string; resolve: () => void; reject: (e: unknown) => void }[] = [];
   private pending = new Map<string, { resolve: () => void; reject: (e: unknown) => void }>();
@@ -21,6 +24,15 @@ class FakePlayer implements AudioPlayer {
   }
   stop(): void {
     this.stops++;
+  }
+  pause(): void {
+    this.pauses++;
+  }
+  resume(): void {
+    this.resumes++;
+  }
+  setRate(rate: number): void {
+    this.rates.push(rate);
   }
   finish(id: string): void {
     this.pending.get(id)!.resolve();
@@ -196,6 +208,9 @@ describe("PlaybackQueue", () => {
         throw new Error("boom");
       },
       stop: () => {},
+      pause: () => {},
+      resume: () => {},
+      setRate: () => {},
     };
     const q = new PlaybackQueue(throwing, { selfUserId: ME, onError: (i) => errors.push(i.id) });
     q.enqueue(item("a", 1));
@@ -244,7 +259,70 @@ describe("PlaybackQueue", () => {
     queue.enqueue(item("b", 2));
     queue.clear();
     expect(player.stops).toBe(1);
-    expect(queue.snapshot()).toEqual({ current: null, queued: [], paused: [] });
+    expect(queue.snapshot()).toEqual({ current: null, queued: [], paused: [], userPaused: false });
+  });
+
+  describe("user pause / resume", () => {
+    it("pauses in place and resumes without replaying", async () => {
+      queue.enqueue(item("a", 1));
+      queue.enqueue(item("b", 2));
+      expect(player.started).toEqual(["a"]);
+
+      queue.toggleCurrent();
+      expect(player.pauses).toBe(1);
+      expect(player.stops).toBe(0); // the position is kept, not thrown away
+      expect(queue.snapshot().userPaused).toBe(true);
+      expect(queue.snapshot().current?.id).toBe("a");
+
+      queue.toggleCurrent();
+      expect(player.resumes).toBe(1);
+      expect(queue.snapshot().userPaused).toBe(false);
+      expect(player.started).toEqual(["a"]); // never restarted
+
+      player.finish("a");
+      await flush();
+      expect(player.started).toEqual(["a", "b"]);
+    });
+
+    it("does not start the next message while the current one is paused", () => {
+      queue.enqueue(item("a", 1));
+      queue.toggleCurrent();
+      queue.enqueue(item("b", 2));
+      expect(player.started).toEqual(["a"]);
+      expect(queue.snapshot().queued.map((q) => q.id)).toEqual(["b"]);
+    });
+
+    it("clears the flag once the message ends", async () => {
+      queue.enqueue(item("a", 1));
+      queue.toggleCurrent();
+      expect(queue.snapshot().userPaused).toBe(true);
+      queue.toggleCurrent();
+      player.finish("a");
+      await flush();
+      expect(queue.snapshot().userPaused).toBe(false);
+    });
+
+    it("an interrupt while paused replays from the start afterwards", () => {
+      queue.enqueue(item("a", 1));
+      queue.toggleCurrent();
+      queue.setPaused("recording", true);
+      expect(queue.snapshot().userPaused).toBe(false);
+      expect(queue.snapshot().queued.map((q) => q.id)).toEqual(["a"]);
+      queue.setPaused("recording", false);
+      expect(player.started).toEqual(["a", "a"]);
+    });
+
+    it("is a no-op when nothing is playing", () => {
+      queue.toggleCurrent();
+      expect(player.pauses).toBe(0);
+      expect(queue.snapshot().userPaused).toBe(false);
+    });
+  });
+
+  it("forwards the playback speed to the player", () => {
+    queue.setRate(1.5);
+    queue.setRate(2);
+    expect(player.rates).toEqual([1.5, 2]);
   });
 
   describe("watchdog", () => {
@@ -272,6 +350,20 @@ describe("PlaybackQueue", () => {
       player.finish("a");
       await vi.advanceTimersByTimeAsync(10_000);
       expect(errors).toEqual([]);
+    });
+
+    it("stays off while the user has paused and gets a fresh budget on resume", async () => {
+      const q = new PlaybackQueue(player, { selfUserId: ME, watchdogSlackMs: 1000, onError: (i) => errors.push(i.id) });
+      q.enqueue(item("a", 1, OTHER, 2000));
+      q.toggleCurrent();
+      await vi.advanceTimersByTimeAsync(60_000); // a long pause is not a stall
+      expect(errors).toEqual([]);
+
+      q.toggleCurrent();
+      await vi.advanceTimersByTimeAsync(2999);
+      expect(errors).toEqual([]);
+      await vi.advanceTimersByTimeAsync(2);
+      expect(errors).toEqual(["a"]);
     });
   });
 

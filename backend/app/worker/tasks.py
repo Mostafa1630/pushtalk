@@ -28,7 +28,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from app.audio import ffmpeg
+from app.audio import ffmpeg, transcription
 from app.core.config import Settings
 from app.models import Channel, Message, MessageStatus, User
 from app.realtime import events
@@ -43,6 +43,8 @@ logger = logging.getLogger("app.worker")
 MAX_TRIES = 3
 ORDERING_POLL_SECONDS = 0.25
 TRANSIENT_ERRORS = (DBAPIError, RedisConnectionError, ConnectionError)
+# Enqueued by the worker itself once a message is live; see transcribe_message.
+TRANSCRIBE_MESSAGE_JOB = "transcribe_message"
 
 
 class ProcessingFailed(Exception):
@@ -103,7 +105,79 @@ async def process_message(ctx: dict[str, Any], message_id: str) -> str:
             "elapsed_ms": round((asyncio.get_running_loop().time() - started) * 1000),
         },
     )
+    # Second step, queued only after the message is live: transcription must
+    # never hold up delivery, and it is skipped entirely when disabled.
+    if settings.transcription_enabled:
+        enqueue = getattr(ctx.get("redis"), "enqueue_job", None)
+        if enqueue:
+            await enqueue(
+                TRANSCRIBE_MESSAGE_JOB, message_id, _job_id=f"transcript:{message_id}"
+            )
     return "ready"
+
+
+async def transcribe_message(ctx: dict[str, Any], message_id: str) -> str:
+    """Add a transcript to an already-delivered message and push it to the channel.
+
+    Best effort by design: any failure leaves the message untouched (audio still
+    plays, it simply has no text) instead of marking it failed.
+    """
+    settings, session_factory, storage = _deps(ctx)
+    mid = uuid.UUID(message_id)
+    log = {"message_id": message_id}
+
+    async with session_factory() as session:
+        message = await session.get(Message, mid)
+        if (
+            message is None
+            or message.status != MessageStatus.READY.value
+            or message.transcript is not None
+            or not message.audio_path
+        ):
+            logger.info("transcription_skipped", extra=log)
+            return "skipped"
+        audio_path = storage.path_for(message.audio_path)
+        channel_id = message.channel_id
+
+    if not audio_path.is_file():
+        logger.warning("transcription_missing_audio", extra=log)
+        return "skipped"
+
+    started = asyncio.get_running_loop().time()
+    try:
+        text = await transcription.transcribe(
+            settings, audio_path, timeout=settings.transcription_timeout_seconds
+        )
+    except transcription.TranscriptionError as exc:
+        logger.warning("transcription_failed", extra={**log, "error": str(exc)[:300]})
+        return "failed"
+
+    if text is None:  # silence, or speech the model could not pick up
+        logger.info("transcription_empty", extra=log)
+        return "empty"
+
+    try:
+        async with session_factory() as session, session.begin():
+            message = await session.get(Message, mid)
+            if message is None:
+                return "skipped"
+            message.transcript = text
+    except TRANSIENT_ERRORS as exc:
+        # Worth another try: the audio is still on disk and the job is idempotent.
+        logger.warning("transcription_db_unavailable", extra={**log, "error": type(exc).__name__})
+        raise Retry(defer=5) from exc
+
+    await events.publish_event(ctx["redis"], channel_id, events.message_transcript(str(mid), text))
+    logger.info(
+        "transcription_succeeded",
+        extra={
+            **log,
+            "channel_id": channel_id,
+            "chars": len(text),
+            "elapsed_ms": round((asyncio.get_running_loop().time() - started) * 1000),
+        },
+    )
+    return "transcribed"
 
 
 async def _transcode(settings: Settings, src: Path, dst: Path) -> tuple[list[float], int]:

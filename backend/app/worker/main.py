@@ -3,7 +3,7 @@
 import logging
 from typing import Any
 
-from arq import cron
+from arq import cron, func
 from arq.connections import RedisSettings
 from sqlalchemy.ext.asyncio import async_sessionmaker
 
@@ -12,7 +12,13 @@ from app.core.logging import configure_logging
 from app.db.session import create_engine
 from app.services.job_queue import PROCESS_MESSAGE_JOB
 from app.storage.local import LocalStorage
-from app.worker.tasks import MAX_TRIES, process_message, sweep_stale_messages
+from app.worker.tasks import (
+    MAX_TRIES,
+    TRANSCRIBE_MESSAGE_JOB,
+    process_message,
+    sweep_stale_messages,
+    transcribe_message,
+)
 
 logger = logging.getLogger("app.worker")
 settings = get_settings()
@@ -34,7 +40,11 @@ async def shutdown(ctx: dict[str, Any]) -> None:
 
 
 class WorkerSettings:
-    functions = [process_message]
+    functions = [
+        process_message,
+        # Speech-to-text is slower than the audio pipeline and gets its own budget.
+        func(transcribe_message, timeout=int(settings.transcription_timeout_seconds + 30)),
+    ]
     cron_jobs = [cron(sweep_stale_messages, second={0, 30}, run_at_startup=True)]
     on_startup = startup
     on_shutdown = shutdown
@@ -48,3 +58,4 @@ class WorkerSettings:
 
 
 assert process_message.__name__ == PROCESS_MESSAGE_JOB  # enqueue name must match
+assert transcribe_message.__name__ == TRANSCRIBE_MESSAGE_JOB

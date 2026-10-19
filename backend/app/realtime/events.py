@@ -26,6 +26,7 @@ EVT_READY = "ready"
 EVT_MESSAGE_NEW = "message.new"
 EVT_MESSAGE_FAILED = "message.failed"
 EVT_MESSAGE_STATUS = "message.status"
+EVT_MESSAGE_TRANSCRIPT = "message.transcript"
 EVT_PRESENCE = "presence"
 EVT_RESYNC = "resync"
 EVT_NOTIFICATION_NEW = "notification.new"
@@ -65,6 +66,11 @@ def message_status(
         "kind": kind,  # "delivered" | "played"
         "receipts": {"recipients": recipients, "delivered": delivered, "played": played},
     }
+
+
+def message_transcript(message_id: str, transcript: str) -> dict[str, Any]:
+    """Sent after the message was already delivered: the transcript arrives late."""
+    return {"type": EVT_MESSAGE_TRANSCRIPT, "message_id": message_id, "transcript": transcript}
 
 
 def presence(online_user_ids: list[int]) -> dict[str, Any]:

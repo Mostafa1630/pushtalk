@@ -10,3 +10,4 @@ bcrypt==5.0.0
 python-multipart==0.0.32
 arq==0.28.0
 redis==5.3.1
+faster-whisper==1.2.1

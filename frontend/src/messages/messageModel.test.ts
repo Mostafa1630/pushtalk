@@ -16,6 +16,7 @@ const base: ChatMessage = {
   seq: null,
   durationMs: null,
   waveform: null,
+  transcript: null,
   errorCode: null,
   errorMessage: null,
   createdAt: "2026-01-01T00:00:00Z",
@@ -30,6 +31,17 @@ describe("messageModel", () => {
     const merged = mergeMessage(ready, { ...base, status: "processing" });
     expect(merged.status).toBe("ready");
     expect(merged.seq).toBe(5);
+  });
+
+  it("updates transcript when a late transcript arrives", () => {
+    const ready = { ...base, status: "ready" as const, seq: 1 };
+    const withText = mergeMessage(ready, {
+      ...base,
+      status: "ready" as const,
+      seq: 1,
+      transcript: "Hello world",
+    });
+    expect(withText.transcript).toBe("Hello world");
   });
 
   it("drops the retained audio blob once the server accepted the upload", () => {

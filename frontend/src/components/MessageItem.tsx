@@ -1,6 +1,7 @@
 import { ownStatusLabel, type ChatMessage } from "../messages/messageModel";
 import { API_BASE } from "../api/client";
 import { useLanguage, type TranslationKey } from "../i18n";
+import { rateLabel } from "../playback/rate";
 import { Waveform } from "./Waveform";
 
 const DEFAULT_AVATAR = "/images/avatar-placeholder.jpg";
@@ -10,8 +11,12 @@ interface Props {
   isOwn: boolean;
   isAdmin: boolean;
   isPlaying: boolean;
+  /** The playing message is held where the user paused it. */
+  isPaused: boolean;
   isQueued: boolean;
-  onPlay: () => void;
+  rate: number;
+  onTogglePlay: () => void;
+  onCycleRate: () => void;
   onRetry: () => void;
 }
 
@@ -46,11 +51,16 @@ export function MessageItem({
   isOwn,
   isAdmin,
   isPlaying,
+  isPaused,
   isQueued,
-  onPlay,
+  rate,
+  onTogglePlay,
+  onCycleRate,
   onRetry,
 }: Props) {
   const { language, t } = useLanguage();
+  // Paused still counts as "this message is the current one" for the icon.
+  const playing = isPlaying && !isPaused;
   const classes = [
     "message",
     isOwn ? "message--own" : "",
@@ -120,18 +130,34 @@ export function MessageItem({
           <div className="message__body">
             <button
               className="icon-button"
-              onClick={onPlay}
+              onClick={onTogglePlay}
               disabled={m.status !== "ready"}
-              aria-label={isPlaying ? t("messagePlaying") : t("playMessage")}
-              title={t("playMessage")}
+              aria-label={playing ? t("pauseMessage") : t("playMessage")}
+              title={playing ? t("pauseMessage") : t("playMessage")}
+              data-testid="message-play"
             >
-              {isPlaying ? "♪" : "▶"}
+              {playing ? "⏸" : "▶"}
             </button>
-            <Waveform peaks={m.waveform} active={isPlaying} />
+            <Waveform peaks={m.waveform} active={playing} />
             <span className="message__duration">
               {formatDuration(m.durationMs)}
             </span>
+            <button
+              className="message__rate"
+              onClick={onCycleRate}
+              disabled={m.status !== "ready"}
+              aria-label={t("playbackSpeedValue", { rate: rateLabel(rate) })}
+              title={t("playbackSpeed")}
+              data-testid="message-rate"
+            >
+              {rateLabel(rate)}
+            </button>
           </div>
+          {m.transcript && (
+            <p className="message__transcript" data-testid="message-transcript">
+              {m.transcript}
+            </p>
+          )}
           {isOwn && (
             <div className="message__status" data-testid="message-status">
               {localizedStatus}

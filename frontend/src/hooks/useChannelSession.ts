@@ -1,6 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { currentToken } from "../api/client";
 import { HtmlAudioPlayer } from "../playback/HtmlAudioPlayer";
+import { DEFAULT_RATE } from "../playback/rate";
 import { ChannelSession, type SessionState } from "../session/ChannelSession";
 
 const EMPTY: SessionState = {
@@ -10,7 +11,8 @@ const EMPTY: SessionState = {
   online: [],
   connection: "connecting",
   retryInMs: null,
-  playback: { current: null, queued: [], paused: [] },
+  playback: { current: null, queued: [], paused: [], userPaused: false },
+  playbackRate: DEFAULT_RATE,
   isLeader: false,
   fatalError: null,
   notice: null,

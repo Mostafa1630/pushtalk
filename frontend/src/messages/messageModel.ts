@@ -27,6 +27,7 @@ export interface ChatMessage {
   seq: number | null;
   durationMs: number | null;
   waveform: number[] | null;
+  transcript: string | null;
   errorCode: string | null;
   errorMessage: string | null;
   createdAt: string;
@@ -57,6 +58,7 @@ export function fromDTO(dto: MessageDTO): ChatMessage {
     seq: dto.seq,
     durationMs: dto.duration_ms,
     waveform: dto.waveform,
+    transcript: dto.transcript ?? null,
     errorCode: dto.error_code,
     errorMessage: dto.error_code ? describeErrorCode(dto.error_code) : null,
     createdAt: dto.created_at,
@@ -74,11 +76,16 @@ export function mergeMessage(
   if (!existing) return update;
   if (RANK[update.status] < RANK[existing.status]) {
     // e.g. the 202 "processing" response arrives after the "ready" WS event.
-    return { ...existing, id: existing.id ?? update.id };
+    return {
+      ...existing,
+      id: existing.id ?? update.id,
+      transcript: update.transcript ?? existing.transcript,
+    };
   }
   return {
     ...existing,
     ...update,
+    transcript: update.transcript ?? existing.transcript,
     receipts: update.receipts ?? existing.receipts,
     playedByMe: existing.playedByMe || update.playedByMe,
     unheard: update.unheard && !existing.playedByMe,

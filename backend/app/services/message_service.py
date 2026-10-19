@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import Settings
 from app.core.errors import NotFound, ServiceUnavailable
+from app.images import avatar_url_for
 from app.models import Message, MessageStatus, User
 from app.realtime import events
 from app.repositories.channels import ChannelRepository
@@ -48,11 +49,12 @@ def to_out(
         channel_id=message.channel_id,
         sender_id=message.sender_id,
         sender_username=sender_username,
-        sender_avatar_url=(f"/api/users/{message.sender_id}/avatar" if sender_avatar_path else None),
+        sender_avatar_url=avatar_url_for(message.sender_id, sender_avatar_path),
         status=message.status,
         seq=message.seq,
         duration_ms=message.duration_ms,
         waveform=message.waveform,
+        transcript=message.transcript,
         error_code=message.error_code,
         created_at=message.created_at,
         receipts=receipts,

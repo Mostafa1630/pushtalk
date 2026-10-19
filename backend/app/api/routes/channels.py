@@ -6,7 +6,7 @@ from fastapi.responses import FileResponse
 from app.api.deps import CurrentUser, PresenceDep, RedisDep, SessionDep, StorageDep
 from app.core.errors import NotFound
 from app.repositories.channels import ChannelRepository
-from app.schemas.channel import ChannelCreate, ChannelOut, ChannelUpdate, MemberOut
+from app.schemas.channel import ChannelCreate, ChannelOut, ChannelUpdate, DirectChannelCreate, MemberOut
 from app.services import channel_service
 from app.storage.local import LocalStorage
 
@@ -32,6 +32,20 @@ async def list_channels(user: CurrentUser, session: SessionDep) -> list[ChannelO
 @router.post("", response_model=ChannelOut, status_code=status.HTTP_201_CREATED)
 async def create_channel(body: ChannelCreate, user: CurrentUser, session: SessionDep) -> ChannelOut:
     return await channel_service.create_channel(session, user, body)
+
+
+@router.get("/direct", response_model=list[ChannelOut])
+async def list_direct_channels(user: CurrentUser, session: SessionDep) -> list[ChannelOut]:
+    return await channel_service.list_direct_channels(session, user)
+
+
+@router.post("/direct", response_model=ChannelOut)
+async def create_or_get_dm(
+    body: DirectChannelCreate, user: CurrentUser, session: SessionDep
+) -> ChannelOut:
+    return await channel_service.create_or_get_dm(
+        session, user, target_user_id=body.user_id, target_username=body.username
+    )
 
 
 @router.get("/{channel_id}", response_model=ChannelOut)

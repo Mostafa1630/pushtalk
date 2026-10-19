@@ -19,6 +19,9 @@
  *  - Any other playback error (404, decode error, network) skips that item,
  *    reports it, and continues with the next one - the queue never gets stuck.
  *  - A watchdog skips an item that neither ends nor errors (stalled stream).
+ *  - The user can pause the current item in place and resume it from the same
+ *    position; the watchdog is off while it is paused.
+ *  - One playback speed applies to everything the queue plays.
  */
 
 export interface QueueItem {
@@ -35,6 +38,11 @@ export interface AudioPlayer {
   play(item: QueueItem): Promise<void>;
   /** Stop immediately; the pending play() promise may settle or not. */
   stop(): void;
+  /** Hold the current position; resume() continues from it. */
+  pause(): void;
+  resume(): void;
+  /** Speed applied to the current item and to everything played afterwards. */
+  setRate(rate: number): void;
 }
 
 /** Thrown by an AudioPlayer when the browser refuses to play without a gesture. */
@@ -51,6 +59,8 @@ export interface QueueSnapshot {
   current: QueueItem | null;
   queued: QueueItem[];
   paused: PauseReason[];
+  /** The current item was paused by the user and can be resumed in place. */
+  userPaused: boolean;
 }
 
 export interface PlaybackQueueOptions {
@@ -72,6 +82,8 @@ export class PlaybackQueue {
   private current: QueueItem | null = null;
   private readonly played = new Set<string>();
   private readonly paused = new Set<PauseReason>();
+  /** True while `current` is held by the user; always false when nothing plays. */
+  private userPaused = false;
   /** Incremented on every start/stop so late promise settlements are ignored. */
   private generation = 0;
   private watchdog: unknown = null;
@@ -142,6 +154,27 @@ export class PlaybackQueue {
     this.setPaused("blocked", false);
   }
 
+  /** Pause the playing item where it is, or resume it from that position. */
+  toggleCurrent(): void {
+    const item = this.current;
+    if (!item) return;
+    if (this.userPaused) {
+      this.userPaused = false;
+      this.player.resume();
+      // The stall detector was off while paused, so give it a fresh budget.
+      this.armWatchdog(item, this.generation);
+    } else {
+      this.userPaused = true;
+      this.disarmWatchdog();
+      this.player.pause();
+    }
+    this.emit();
+  }
+
+  setRate(rate: number): void {
+    this.player.setRate(rate);
+  }
+
   /** Stop everything (channel closed). */
   clear(): void {
     this.queued = [];
@@ -150,7 +183,12 @@ export class PlaybackQueue {
   }
 
   snapshot(): QueueSnapshot {
-    return { current: this.current, queued: [...this.queued], paused: [...this.paused] };
+    return {
+      current: this.current,
+      queued: [...this.queued],
+      paused: [...this.paused],
+      userPaused: this.userPaused,
+    };
   }
 
   // ---- internals ------------------------------------------------------------
@@ -181,6 +219,7 @@ export class PlaybackQueue {
     const item = this.current;
     this.disarmWatchdog();
     this.current = null;
+    this.userPaused = false;
 
     if (error instanceof AutoplayBlockedError) {
       this.queued.unshift(item);
@@ -201,6 +240,7 @@ export class PlaybackQueue {
     this.generation++; // invalidate the pending play() promise
     this.disarmWatchdog();
     this.current = null;
+    this.userPaused = false;
     this.player.stop();
     if (item && requeue) this.queued.unshift(item);
   }

@@ -5,11 +5,12 @@ type Translate = (key: TranslationKey, values?: TranslationValues) => string;
 type YupSchema = {
   validate: (
     value: unknown,
-    options?: { abortEarly?: boolean },
+    options?: { abortEarly?: boolean }
   ) => Promise<unknown>;
 };
-
-const USERNAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
+// username =  mostafa@gmail.com
+const USERNAME_PATTERN = /^[A-Za-z0-9_.-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
+// const USERNAME_PATTERN = /^[A-Za-z0-9_.-]+$/;
 const CHANNEL_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]{1,63}$/;
 
 const username = yup
@@ -96,7 +97,7 @@ function formatIssue(issue: yup.ValidationError, translate: Translate): string {
 export async function validateForm(
   schema: YupSchema,
   values: Record<string, unknown>,
-  translate: Translate,
+  translate: Translate
 ): Promise<Record<string, string>> {
   try {
     await schema.validate(values, { abortEarly: false });

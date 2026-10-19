@@ -18,6 +18,12 @@ WORKDIR /app
 COPY requirements.txt requirements-dev.txt ./
 RUN pip install -r requirements-dev.txt
 
+# Bake the speech-to-text model into the image (its own layer, so later code
+# changes never re-download it). Keep in sync with TRANSCRIPTION_MODEL.
+ARG WHISPER_MODEL=base
+COPY scripts/warm_transcription.py ./scripts/warm_transcription.py
+RUN python scripts/warm_transcription.py "$WHISPER_MODEL" /opt/whisper
+
 COPY . .
 
 # Run as an unprivileged user. The media directory is created here with the
